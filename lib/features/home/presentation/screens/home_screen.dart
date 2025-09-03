@@ -1,78 +1,357 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/services/supabase_service.dart';
+import '../../../../core/services/gemini_service.dart';
+import '../../../../core/services/location_service.dart';
+import '../../../diagnosis/presentation/screens/crop_diagnosis_screen.dart';
+import '../../../loans/presentation/screens/bank_loans_screen.dart';
+import '../../../market/presentation/screens/market_screen.dart';
+import '../../../account/presentation/screens/account_screen.dart';
 
-/// Home Screen - Main dashboard
-class HomeScreen extends StatefulWidget {
+/// Modern Home Screen with comprehensive dashboard
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with TickerProviderStateMixin {
+  late AnimationController _refreshController;
+  final ScrollController _scrollController = ScrollController();
+
+  // Data state
+  Map<String, dynamic>? _userData;
+  Map<String, dynamic>? _weatherData;
+  List<Map<String, dynamic>> _announcements = [];
+  List<Map<String, dynamic>> _farmCrops = [];
+  List<Map<String, dynamic>> _marketPrices = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Load user data
+      _userData = await SupabaseService.getCurrentUser();
+
+      // Load weather data based on location
+      final position = await LocationService.getCurrentLocation();
+      if (position != null) {
+        _weatherData = await LocationService.getWeatherData(
+          position.latitude,
+          position.longitude,
+        );
+      }
+
+      // Load announcements
+      _announcements = await SupabaseService.getActiveAnnouncements();
+
+      // Load market prices
+      await _loadMarketPrices();
+
+      // Load farm crops if user has farms
+      if (_userData != null) {
+        final farms = await SupabaseService.getUserFarms();
+        if (farms.isNotEmpty) {
+          _farmCrops = await SupabaseService.getFarmCrops(farms.first['id']);
+        }
+      }
+    } catch (e) {
+      print('Error loading initial data: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Morning';
+    if (hour < 17) return 'Afternoon';
+    return 'Evening';
+  }
+
+  Future<void> _loadMarketPrices() async {
+    try {
+      final commodities = ['wheat', 'rice', 'cotton', 'soybean'];
+      _marketPrices.clear();
+
+      for (String commodity in commodities) {
+        final priceData = await GeminiAIService.getMarketPrices(
+          commodity,
+          'India',
+        );
+        _marketPrices.add(priceData);
+      }
+    } catch (e) {
+      print('Error loading market prices: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _onRefresh() async {
+    _refreshController.forward();
+    await _loadInitialData();
+    _refreshController.reset();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Good Morning, Farmer!'),
-        backgroundColor: const Color(0xFF1E523A),
-        foregroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              // Handle notifications
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Weather Card
-            _buildWeatherCard(),
-            const SizedBox(height: 16),
+      backgroundColor: KrushakColors.backgroundLight,
+      body: RefreshIndicator(
+        onRefresh: _onRefresh,
+        color: KrushakColors.primaryGreen,
+        child: CustomScrollView(
+          controller: _scrollController,
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            // Modern App Bar
+            SliverAppBar(
+              expandedHeight: 120,
+              floating: false,
+              pinned: true,
+              elevation: 0,
+              backgroundColor: KrushakColors.primaryGreen,
+              flexibleSpace: FlexibleSpaceBar(
+                background: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: KrushakColors.primaryGradient,
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(KrushakSpacing.md),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 25,
+                                backgroundColor: KrushakColors.white,
+                                child: Icon(
+                                  Icons.agriculture,
+                                  color: KrushakColors.primaryGreen,
+                                  size: KrushakIconSizes.md,
+                                ),
+                              ),
+                              const SizedBox(width: KrushakSpacing.md),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Good ${_getGreeting()}!',
+                                      style: KrushakTextStyles.bodyMedium
+                                          .copyWith(
+                                            color: KrushakColors.white
+                                                .withOpacity(0.8),
+                                          ),
+                                    ),
+                                    Text(
+                                      _userData?['full_name'] ?? 'Farmer',
+                                      style: KrushakTextStyles.h4.copyWith(
+                                        color: KrushakColors.white,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () {},
+                                icon: Stack(
+                                  children: [
+                                    Icon(
+                                      Icons.notifications_outlined,
+                                      color: KrushakColors.white,
+                                      size: KrushakIconSizes.md,
+                                    ),
+                                    Positioned(
+                                      top: 0,
+                                      right: 0,
+                                      child: Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: const BoxDecoration(
+                                          color: KrushakColors.error,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
-            // Quick Actions
-            _buildQuickActionsSection(),
-            const SizedBox(height: 16),
+            // Main Content
+            SliverPadding(
+              padding: const EdgeInsets.all(KrushakSpacing.md),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  // Announcements
+                  if (_announcements.isNotEmpty) ...[
+                    _buildAnnouncementsCard(),
+                    const SizedBox(height: KrushakSpacing.md),
+                  ],
 
-            // Farm Snapshot
-            _buildFarmSnapshotCard(),
-            const SizedBox(height: 16),
+                  // Weather Card
+                  _buildWeatherCard(),
+                  const SizedBox(height: KrushakSpacing.md),
 
-            // Alerts & Recommendations
-            _buildAlertsSection(),
-            const SizedBox(height: 16),
+                  // Quick Actions Grid
+                  _buildQuickActionsGrid(),
+                  const SizedBox(height: KrushakSpacing.md),
 
-            // Recent Activity
-            _buildRecentActivitySection(),
+                  // Farm Overview
+                  _buildFarmOverviewCard(),
+                  const SizedBox(height: KrushakSpacing.md),
+
+                  // AI Insights
+                  _buildAIInsightsCard(),
+                  const SizedBox(height: KrushakSpacing.md),
+
+                  // Crop Monitoring
+                  _buildCropMonitoringCard(),
+                  const SizedBox(height: KrushakSpacing.md),
+
+                  // Market Prices
+                  _buildMarketPricesCard(),
+                  const SizedBox(height: KrushakSpacing.xl),
+                ]),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildWeatherCard() {
+  Widget _buildAnnouncementsCard() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(KrushakSpacing.lg),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF35906A), Color(0xFF40B0B0)],
+        gradient: LinearGradient(
+          colors: [Colors.orange.withOpacity(0.1), Colors.red.withOpacity(0.1)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+        borderRadius: BorderRadius.circular(KrushakRadius.lg),
+        border: Border.all(color: Colors.orange.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.campaign,
+                color: Colors.orange,
+                size: KrushakIconSizes.md,
+              ),
+              const SizedBox(width: KrushakSpacing.sm),
+              Text(
+                'Important Announcements',
+                style: KrushakTextStyles.h5.copyWith(
+                  color: Colors.orange,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
           ),
+          const SizedBox(height: KrushakSpacing.md),
+          ...(_announcements
+              .take(2)
+              .map(
+                (announcement) => Container(
+                  margin: const EdgeInsets.only(bottom: KrushakSpacing.sm),
+                  padding: const EdgeInsets.all(KrushakSpacing.md),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(KrushakRadius.md),
+                    border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        announcement['title'] ?? 'Announcement',
+                        style: KrushakTextStyles.labelLarge.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        announcement['message'] ?? 'No message',
+                        style: KrushakTextStyles.bodySmall.copyWith(
+                          color: KrushakColors.mediumGray,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              )
+              .toList()),
         ],
+      ),
+    );
+  }
+
+  Widget _buildWeatherCard() {
+    final weather = _weatherData;
+    final temperature = weather?['temperature']?.toString() ?? '28';
+    final description = weather?['weatherDescription'] ?? 'Partly Cloudy';
+    final humidity = weather?['humidity']?.toString() ?? '65';
+    final windSpeed = weather?['windSpeed']?.toString() ?? '12';
+    final location = weather?['location'] ?? 'Current Location';
+
+    return Container(
+      padding: const EdgeInsets.all(KrushakSpacing.lg),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4CAF50), Color(0xFF2E7D32)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(KrushakRadius.lg),
+        boxShadow: KrushakShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,39 +362,41 @@ class _HomeScreenState extends State<HomeScreen> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Today\'s Weather',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                  Text(
+                    'Today\'s Weather - $location',
+                    style: KrushakTextStyles.labelMedium.copyWith(
+                      color: KrushakColors.white.withOpacity(0.8),
                     ),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    '28°C',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 32,
+                  Text(
+                    '${temperature}°C',
+                    style: KrushakTextStyles.h1.copyWith(
+                      color: KrushakColors.white,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const Text(
-                    'Partly Cloudy',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                  Text(
+                    description,
+                    style: KrushakTextStyles.bodySmall.copyWith(
+                      color: KrushakColors.white.withOpacity(0.7),
+                    ),
                   ),
                 ],
               ),
-              const Icon(Icons.wb_cloudy, color: Colors.white, size: 48),
+              const Icon(Icons.wb_cloudy, color: KrushakColors.white, size: 48),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: KrushakSpacing.lg),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildWeatherDetail('Humidity', '65%'),
-              _buildWeatherDetail('Wind', '12 km/h'),
-              _buildWeatherDetail('Rain', '20%'),
+              _buildWeatherDetail('Humidity', '$humidity%'),
+              _buildWeatherDetail('Wind', '$windSpeed km/h'),
+              _buildWeatherDetail(
+                'Rain',
+                weather?['cloudiness']?.toString() ?? '20%',
+              ),
             ],
           ),
         ],
@@ -128,64 +409,77 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Text(
           value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
+          style: KrushakTextStyles.labelLarge.copyWith(
+            color: KrushakColors.white,
             fontWeight: FontWeight.w600,
           ),
         ),
         Text(
           label,
-          style: const TextStyle(color: Colors.white70, fontSize: 12),
+          style: KrushakTextStyles.caption.copyWith(
+            color: KrushakColors.white.withOpacity(0.7),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildQuickActionsSection() {
+  Widget _buildQuickActionsGrid() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Quick Actions',
-          style: TextStyle(
-            fontSize: 20,
+          style: KrushakTextStyles.h4.copyWith(
+            color: KrushakColors.primaryGreen,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1E523A),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: KrushakSpacing.md),
         GridView.count(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           crossAxisCount: 2,
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
+          crossAxisSpacing: KrushakSpacing.md,
+          mainAxisSpacing: KrushakSpacing.md,
           childAspectRatio: 1.2,
           children: [
             _buildQuickActionCard(
               'Crop Diagnosis',
               Icons.local_hospital,
-              const Color(0xFF1E523A),
-              () {},
+              KrushakColors.primaryGreen,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const CropDiagnosisScreen(),
+                ),
+              ),
             ),
             _buildQuickActionCard(
               'Log Practice',
               Icons.eco,
-              const Color(0xFF35906A),
+              KrushakColors.secondaryGreen,
               () {},
             ),
             _buildQuickActionCard(
               'Market Prices',
               Icons.trending_up,
-              const Color(0xFF40B0B0),
-              () {},
+              KrushakColors.accentTeal,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MarketScreen()),
+              ),
             ),
             _buildQuickActionCard(
               'Apply Loan',
               Icons.account_balance,
-              const Color(0xFF35906A),
-              () {},
+              KrushakColors.info,
+              () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BankLoansScreen(),
+                ),
+              ),
             ),
           ],
         ),
@@ -199,56 +493,49 @@ class _HomeScreenState extends State<HomeScreen> {
     Color color,
     VoidCallback onTap,
   ) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: Colors.white, size: 32),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(KrushakRadius.lg),
+        child: Container(
+          padding: const EdgeInsets.all(KrushakSpacing.md),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(KrushakRadius.lg),
+            boxShadow: KrushakShadows.card,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: KrushakColors.white, size: KrushakIconSizes.lg),
+              const SizedBox(height: KrushakSpacing.sm),
+              Text(
+                title,
+                style: KrushakTextStyles.labelMedium.copyWith(
+                  color: KrushakColors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildFarmSnapshotCard() {
+  Widget _buildFarmOverviewCard() {
+    final totalArea = _userData?['farm_area'] ?? '5.2';
+    final activeCrops = _farmCrops.length.toString();
+    final carbonCredits = _userData?['carbon_credits'] ?? '124';
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(KrushakSpacing.lg),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        color: KrushakColors.white,
+        borderRadius: BorderRadius.circular(KrushakRadius.lg),
+        boxShadow: KrushakShadows.card,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -256,23 +543,49 @@ class _HomeScreenState extends State<HomeScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'My Farm Snapshot',
-                style: TextStyle(
-                  fontSize: 18,
+              Text(
+                'My Farm Overview',
+                style: KrushakTextStyles.h5.copyWith(
+                  color: KrushakColors.primaryGreen,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1E523A),
                 ),
               ),
-              TextButton(onPressed: () {}, child: const Text('View All')),
+              TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AccountScreen(),
+                  ),
+                ),
+                child: Text(
+                  'View Details',
+                  style: KrushakTextStyles.labelMedium.copyWith(
+                    color: KrushakColors.accentTeal,
+                  ),
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: KrushakSpacing.md),
           Row(
             children: [
-              Expanded(child: _buildSnapshotItem('Total Area', '5.2 acres')),
-              Expanded(child: _buildSnapshotItem('Active Crops', '3')),
-              Expanded(child: _buildSnapshotItem('Carbon Credits', '124')),
+              Expanded(
+                child: _buildFarmStat(
+                  'Total Area',
+                  '$totalArea acres',
+                  Icons.landscape,
+                ),
+              ),
+              Expanded(
+                child: _buildFarmStat('Active Crops', activeCrops, Icons.grass),
+              ),
+              Expanded(
+                child: _buildFarmStat(
+                  'Carbon Credits',
+                  carbonCredits,
+                  Icons.eco,
+                ),
+              ),
             ],
           ),
         ],
@@ -280,93 +593,73 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSnapshotItem(String label, String value) {
+  Widget _buildFarmStat(String label, String value, IconData icon) {
     return Column(
       children: [
+        Icon(
+          icon,
+          color: KrushakColors.primaryGreen,
+          size: KrushakIconSizes.md,
+        ),
+        const SizedBox(height: KrushakSpacing.xs),
         Text(
           value,
-          style: const TextStyle(
-            fontSize: 20,
+          style: KrushakTextStyles.h5.copyWith(
+            color: KrushakColors.primaryGreen,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF1E523A),
           ),
         ),
-        const SizedBox(height: 4),
         Text(
           label,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          style: KrushakTextStyles.caption.copyWith(
+            color: KrushakColors.mediumGray,
+          ),
           textAlign: TextAlign.center,
         ),
       ],
     );
   }
 
-  Widget _buildAlertsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Alerts & Recommendations',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E523A),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _buildAlertCard(
-          'Weather Alert',
-          'Heavy rain expected tomorrow. Secure your crops.',
-          Icons.warning,
-          Colors.orange,
-        ),
-        const SizedBox(height: 8),
-        _buildAlertCard(
-          'Market Update',
-          'Wheat prices increased by 5% this week.',
-          Icons.trending_up,
-          Colors.green,
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAlertCard(
-    String title,
-    String message,
-    IconData icon,
-    Color color,
-  ) {
+  Widget _buildAIInsightsCard() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(KrushakSpacing.lg),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.3)),
+        gradient: LinearGradient(
+          colors: [
+            KrushakColors.accentTeal.withOpacity(0.1),
+            KrushakColors.secondaryGreen.withOpacity(0.1),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(KrushakRadius.lg),
+        border: Border.all(color: KrushakColors.accentTeal.withOpacity(0.3)),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: color,
-                  ),
+          Row(
+            children: [
+              Icon(
+                Icons.psychology,
+                color: KrushakColors.accentTeal,
+                size: KrushakIconSizes.md,
+              ),
+              const SizedBox(width: KrushakSpacing.sm),
+              Text(
+                'AI Insights',
+                style: KrushakTextStyles.h5.copyWith(
+                  color: KrushakColors.accentTeal,
+                  fontWeight: FontWeight.bold,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  message,
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade700),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: KrushakSpacing.md),
+          Text(
+            'Based on current weather patterns and your crop data, consider applying organic fertilizer to your wheat field in the next 2 days for optimal growth.',
+            style: KrushakTextStyles.bodyMedium.copyWith(
+              color: KrushakColors.darkGray,
             ),
           ),
         ],
@@ -374,81 +667,271 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildRecentActivitySection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Recent Activity',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF1E523A),
+  Widget _buildCropMonitoringCard() {
+    return Container(
+      padding: const EdgeInsets.all(KrushakSpacing.lg),
+      decoration: BoxDecoration(
+        color: KrushakColors.white,
+        borderRadius: BorderRadius.circular(KrushakRadius.lg),
+        boxShadow: KrushakShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Crop Monitoring',
+            style: KrushakTextStyles.h5.copyWith(
+              color: KrushakColors.primaryGreen,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        _buildActivityItem(
-          'Crop Diagnosis',
-          'Wheat health analysis completed',
-          '2 hours ago',
-          Icons.local_hospital,
-        ),
-        _buildActivityItem(
-          'Sustainable Practice',
-          'Organic fertilizer application logged',
-          '1 day ago',
-          Icons.eco,
-        ),
-        _buildActivityItem(
-          'Market Trade',
-          'Rice sold to Buyer ABC',
-          '3 days ago',
-          Icons.shopping_cart,
-        ),
-      ],
+          const SizedBox(height: KrushakSpacing.md),
+          if (_farmCrops.isNotEmpty)
+            ...(_farmCrops
+                .take(3)
+                .map(
+                  (crop) => _buildCropItem(
+                    crop['crop_name'] ?? 'Unknown Crop',
+                    crop['area_acres']?.toString() ?? 'Field',
+                    crop['status'] ?? 'Growing',
+                    _getCropStatusColor(crop['status']),
+                  ),
+                )
+                .toList())
+          else ...[
+            _buildCropItem(
+              'Wheat',
+              'Field A',
+              'Healthy',
+              KrushakColors.success,
+            ),
+            _buildCropItem(
+              'Rice',
+              'Field B',
+              'Needs Water',
+              KrushakColors.warning,
+            ),
+            _buildCropItem(
+              'Maize',
+              'Field C',
+              'Excellent',
+              KrushakColors.success,
+            ),
+          ],
+        ],
+      ),
     );
   }
 
-  Widget _buildActivityItem(
-    String title,
-    String subtitle,
-    String time,
-    IconData icon,
+  Color _getCropStatusColor(String? status) {
+    switch (status?.toLowerCase()) {
+      case 'healthy':
+      case 'excellent':
+      case 'growing':
+        return KrushakColors.success;
+      case 'needs water':
+      case 'warning':
+        return KrushakColors.warning;
+      case 'diseased':
+      case 'critical':
+        return KrushakColors.error;
+      default:
+        return KrushakColors.success;
+    }
+  }
+
+  Widget _buildCropItem(
+    String crop,
+    String field,
+    String status,
+    Color statusColor,
   ) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: KrushakSpacing.sm),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFF1E523A).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
+              color: statusColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(KrushakRadius.sm),
             ),
-            child: Icon(icon, color: const Color(0xFF1E523A), size: 20),
+            child: Icon(
+              Icons.grass,
+              color: statusColor,
+              size: KrushakIconSizes.sm,
+            ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: KrushakSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
+                  crop,
+                  style: KrushakTextStyles.labelLarge.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                  field,
+                  style: KrushakTextStyles.caption.copyWith(
+                    color: KrushakColors.mediumGray,
+                  ),
                 ),
               ],
             ),
           ),
-          Text(
-            time,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          Container(
+            padding: const EdgeInsets.symmetric(
+              horizontal: KrushakSpacing.sm,
+              vertical: KrushakSpacing.xs,
+            ),
+            decoration: BoxDecoration(
+              color: statusColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(KrushakRadius.sm),
+            ),
+            child: Text(
+              status,
+              style: KrushakTextStyles.caption.copyWith(
+                color: statusColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMarketPricesCard() {
+    return Container(
+      padding: const EdgeInsets.all(KrushakSpacing.lg),
+      decoration: BoxDecoration(
+        color: KrushakColors.white,
+        borderRadius: BorderRadius.circular(KrushakRadius.lg),
+        boxShadow: KrushakShadows.card,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Market Prices',
+                style: KrushakTextStyles.h5.copyWith(
+                  color: KrushakColors.primaryGreen,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const MarketScreen()),
+                ),
+                child: Text(
+                  'View All',
+                  style: KrushakTextStyles.labelMedium.copyWith(
+                    color: KrushakColors.accentTeal,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: KrushakSpacing.md),
+          if (_marketPrices.isNotEmpty)
+            ...(_marketPrices
+                .take(3)
+                .map(
+                  (priceData) => _buildPriceItem(
+                    priceData['commodity'] ?? 'Unknown',
+                    priceData['current_price'] ?? '₹0/quintal',
+                    priceData['price_trend'] ?? 'stable',
+                    priceData['price_trend'] == 'up',
+                  ),
+                )
+                .toList())
+          else ...[
+            _buildPriceItem('Wheat', '₹2,150', '+5%', true),
+            _buildPriceItem('Rice', '₹3,200', '-2%', false),
+            _buildPriceItem('Maize', '₹1,800', '+8%', true),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPriceItem(
+    String commodity,
+    String price,
+    String change,
+    bool isUp,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: KrushakSpacing.sm),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: KrushakColors.primaryGreen.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(KrushakRadius.sm),
+            ),
+            child: Icon(
+              Icons.grain,
+              color: KrushakColors.primaryGreen,
+              size: KrushakIconSizes.sm,
+            ),
+          ),
+          const SizedBox(width: KrushakSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  commodity,
+                  style: KrushakTextStyles.labelLarge.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'per quintal',
+                  style: KrushakTextStyles.caption.copyWith(
+                    color: KrushakColors.mediumGray,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                price,
+                style: KrushakTextStyles.labelLarge.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Row(
+                children: [
+                  Icon(
+                    isUp ? Icons.trending_up : Icons.trending_down,
+                    color: isUp ? KrushakColors.success : KrushakColors.error,
+                    size: KrushakIconSizes.xs,
+                  ),
+                  Text(
+                    change,
+                    style: KrushakTextStyles.caption.copyWith(
+                      color: isUp ? KrushakColors.success : KrushakColors.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
       ),

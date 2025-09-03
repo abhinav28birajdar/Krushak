@@ -15,12 +15,22 @@ class KrushakColors {
   static const Color lightGray = Color(0xFFCCCCCC);
   static const Color mediumGray = Color(0xFF999999);
   static const Color darkGray = Color(0xFF333333);
+  static const Color textDark = Color(0xFF333333);
+  static const Color grey600 = Color(0xFF757575);
 
   // Background Colors
   static const Color backgroundLight = Color(
     0xFFF8FDF9,
   ); // Very subtle green tint
   static const Color backgroundWhite = Color(0xFFFFFFFF);
+  static const Color background = Color(0xFFF8FDF9);
+
+  // Legacy color mappings for compatibility
+  static const Color primary = primaryGreen;
+  static const Color secondary = secondaryGreen;
+  static const Color accent = accentTeal;
+  static const Color accentBrown = Color(0xFF8D6E63);
+  static const Color secondaryYellow = Color(0xFFFFC107);
 
   // Status Colors
   static const Color success = Color(0xFF4CAF50);
@@ -132,7 +142,7 @@ class KrushakTextStyles {
   );
 
   static const TextStyle labelSmall = TextStyle(
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: FontWeight.w500,
     height: 1.4,
   );
@@ -161,6 +171,15 @@ class KrushakTextStyles {
     fontWeight: FontWeight.w600,
     height: 1.2,
   );
+
+  // Legacy style mappings for compatibility
+  static const TextStyle heading1 = h1;
+  static const TextStyle heading2 = h2;
+  static const TextStyle heading3 = h3;
+  static const TextStyle heading4 = h4;
+  static const TextStyle subheading = h5;
+  static const TextStyle body = bodyMedium;
+  static const TextStyle subtitle = labelLarge;
 
   // Color Variants
   static TextStyle onPrimary(TextStyle style) =>

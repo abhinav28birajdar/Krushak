@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/simple_theme.dart';
 import 'features/splash/presentation/screens/splash_screen.dart';
-import 'shared/presentation/widgets/main_navigation.dart';
+import 'core/navigation/main_navigation_screen.dart';
+import 'core/services/supabase_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Supabase
+  try {
+    await SupabaseService.initialize();
+  } catch (e) {
+    print('Error initializing Supabase: $e');
+  }
 
   // Configure system UI overlay style
   SystemChrome.setSystemUIOverlayStyle(
@@ -17,7 +26,7 @@ void main() {
     ),
   );
 
-  runApp(const KrushakApp());
+  runApp(const ProviderScope(child: KrushakApp()));
 }
 
 /// Main Krushak Application Widget
@@ -37,7 +46,7 @@ class KrushakApp extends StatelessWidget {
       home: const SplashScreen(),
 
       // Routes
-      routes: {'/main': (context) => const MainNavigation()},
+      routes: {'/main': (context) => const MainNavigationScreen()},
 
       // Builder for global configuration
       builder: (context, child) {

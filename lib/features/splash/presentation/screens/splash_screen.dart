@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/config/app_config.dart';
-import '../../../../shared/providers/auth_provider.dart';
+import '../../../../core/navigation/main_navigation_screen.dart';
 
 /// Splash Screen with app initialization
-class SplashScreen extends ConsumerStatefulWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
-  ConsumerState<SplashScreen> createState() => _SplashScreenState();
+  State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends ConsumerState<SplashScreen>
+class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
   late AnimationController _logoController;
   late AnimationController _textController;
@@ -55,19 +52,10 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
   }
 
   void _navigateToNextScreen() {
-    Future.delayed(AppConfig.splashScreenDuration, () {
+    Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
-        final authState = ref.read(authStateProvider);
-        authState.when(
-          data: (user) {
-            if (user != null) {
-              context.go(RouteNames.home);
-            } else {
-              context.go(RouteNames.onboarding);
-            }
-          },
-          loading: () => context.go(RouteNames.onboarding),
-          error: (_, __) => context.go(RouteNames.onboarding),
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
         );
       }
     });
@@ -226,7 +214,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 child: Column(
                   children: [
                     Text(
-                      'Version ${AppConfig.appVersion}',
+                      'Version 1.0.0',
                       style: KrushakTextStyles.caption.copyWith(
                         color: KrushakColors.white.withOpacity(0.6),
                       ),
