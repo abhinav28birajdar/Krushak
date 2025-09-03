@@ -1,0 +1,155 @@
+name: krushak_app
+description: "Krushak - The Farmer Operating System (FarmerOS). Empowering Indian farmers with AI-powered insights, carbon credit marketplace, and digital tools for sustainable agriculture."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # Core Dependencies
+  cupertino_icons: ^1.0.8
+
+  # State Management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Navigation
+  go_router: ^16.2.1
+
+  # Supabase Backend
+  supabase_flutter: ^2.6.0
+
+  # UI/UX Libraries
+  font_awesome_flutter: ^10.7.0
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  flutter_staggered_grid_view: ^0.7.0
+  animations: ^2.0.11
+  badges: ^3.1.2
+
+  # Charts and Data Visualization
+  fl_chart: ^1.1.0
+
+  # Maps and Location
+  google_maps_flutter: ^2.9.0
+  location: ^8.0.1
+  geolocator: ^14.0.2
+
+  # Image Handling
+  image_picker: ^1.1.2
+  photo_view: ^0.15.0
+
+  # Forms and Validation
+  form_builder_validators: ^11.0.0
+  flutter_form_builder: ^10.1.0
+
+  # Local Storage
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  shared_preferences: ^2.3.2
+  flutter_secure_storage: ^9.2.2
+
+  # Networking
+  dio: ^5.7.0
+  connectivity_plus: ^6.0.5
+
+  # Voice and Speech
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.0.2
+
+  # Notifications and Overlays
+  fluttertoast: ^8.2.8
+  overlay_support: ^2.1.0
+  flutter_local_notifications: ^19.4.1
+
+  # Multimedia
+  chewie: ^1.8.5
+  video_player: ^2.9.1
+
+  # Text and Content
+  flutter_markdown: ^0.7.3
+  url_launcher: ^6.3.0
+
+  # Utilities
+  intl: ^0.20.2
+  uuid: ^4.5.0
+  package_info_plus: ^8.0.2
+  device_info_plus: ^11.5.0
+
+  # Background Tasks
+  workmanager: ^0.9.0+3
+
+  # File Handling
+  file_picker: ^10.3.2
+  path_provider: ^2.1.4
+
+  # Firebase (for analytics and crashlytics)
+  firebase_core: ^4.1.0
+  firebase_analytics: ^12.0.1
+  firebase_crashlytics: ^5.0.1
+  firebase_messaging: ^16.0.1
+
+  # Permissions
+  permission_handler: ^12.0.1
+
+  # Search and Filtering
+  flutter_typeahead: ^5.2.0
+
+  # Date and Time
+  table_calendar: ^3.1.2
+
+  # Environment Variables
+  flutter_dotenv: ^6.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+  
+  # Code Generation
+  riverpod_generator: ^2.4.3
+  build_runner: ^2.4.13
+  hive_generator: ^2.0.1
+  json_annotation: ^4.9.0
+  json_serializable: ^6.8.0
+
+flutter:
+  uses-material-design: true
+  generate: true # Enable internationalization
+
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/backgrounds/
+    - assets/animations/
+    - .env
+
+  # fonts:
+  #   - family: Montserrat
+  #     fonts:
+  #       - asset: assets/fonts/Montserrat-Light.ttf
+  #         weight: 300
+  #       - asset: assets/fonts/Montserrat-Regular.ttf
+  #         weight: 400
+  #       - asset: assets/fonts/Montserrat-Medium.ttf
+  #         weight: 500
+  #       - asset: assets/fonts/Montserrat-SemiBold.ttf
+  #         weight: 600
+  #       - asset: assets/fonts/Montserrat-Bold.ttf
+  #         weight: 700
+  #   - family: Lato
+  #     fonts:
+  #       - asset: assets/fonts/Lato-Light.ttf
+  #         weight: 300
+  #       - asset: assets/fonts/Lato-Regular.ttf
+  #         weight: 400
+  #       - asset: assets/fonts/Lato-Bold.ttf
+  #         weight: 700
