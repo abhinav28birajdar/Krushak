@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -10,7 +11,6 @@ import 'core/app_providers.dart';
 import 'features/splash/presentation/screens/splash_screen.dart';
 import 'core/navigation/main_navigation_screen.dart';
 import 'features/auth/presentation/screens/signin_screen.dart';
-import 'features/auth/presentation/screens/signup_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,9 +18,13 @@ void main() async {
   // Load environment variables
   try {
     await dotenv.load(fileName: ".env");
-    print('Environment variables loaded successfully');
+    if (kDebugMode) {
+      print('Environment variables loaded successfully');
+    }
   } catch (e) {
-    print('Error loading .env file: $e');
+    if (kDebugMode) {
+      print('Error loading .env file: $e');
+    }
     // Continue without .env file - will use default values
   }
 
@@ -70,8 +74,7 @@ class KrushakApp extends ConsumerWidget {
       routes: {
         '/main': (context) => const MainNavigationScreen(),
         '/splash': (context) => const SplashScreen(),
-        '/signin': (context) => const SignInScreen(),
-        '/signup': (context) => const SignUpScreen(),
+        '/auth': (context) => const SignInScreen(),
       },
 
       // Global builder for real-time updates
@@ -255,8 +258,8 @@ class AppStateManager extends ConsumerWidget {
           // User logged in - navigate to main screen
           Navigator.of(context).pushReplacementNamed('/main');
         } else {
-          // User logged out - navigate to sign in
-          Navigator.of(context).pushReplacementNamed('/signin');
+          // User logged out - navigate to auth page
+          Navigator.of(context).pushReplacementNamed('/auth');
         }
       }
     });

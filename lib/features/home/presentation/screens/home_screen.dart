@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_constants.dart';
-import '../../../../core/services/supabase_service.dart';
-import '../../../../core/services/gemini_service.dart';
 import '../../../../core/services/location_service.dart';
+import '../../../../core/auth/auth_provider.dart';
+import '../../../../core/providers/dashboard_provider.dart';
+import '../../../../core/providers/market_provider.dart';
 import '../../../diagnosis/presentation/screens/crop_diagnosis_screen.dart';
 import '../../../loans/presentation/screens/bank_loans_screen.dart';
 import '../../../market/presentation/screens/market_screen.dart';
@@ -22,13 +23,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   late AnimationController _refreshController;
   final ScrollController _scrollController = ScrollController();
 
-  // Data state
-  Map<String, dynamic>? _userData;
+  // Local weather data (location-based, not in dashboard provider)
   Map<String, dynamic>? _weatherData;
-  List<Map<String, dynamic>> _announcements = [];
-  List<Map<String, dynamic>> _farmCrops = [];
-  List<Map<String, dynamic>> _marketPrices = [];
-  bool _isLoading = true;
 
   @override
   void initState() {
@@ -41,14 +37,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Future<void> _loadInitialData() async {
-    setState(() {
-      _isLoading = true;
-    });
-
     try {
-      // Load user data
-      _userData = await SupabaseService.getCurrentUser();
-
       // Load weather data based on location
       final position = await LocationService.getCurrentLocation();
       if (position != null) {
@@ -56,27 +45,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           position.latitude,
           position.longitude,
         );
-      }
-
-      // Load announcements
-      _announcements = await SupabaseService.getActiveAnnouncements();
-
-      // Load market prices
-      await _loadMarketPrices();
-
-      // Load farm crops if user has farms
-      if (_userData != null) {
-        final farms = await SupabaseService.getUserFarms();
-        if (farms.isNotEmpty) {
-          _farmCrops = await SupabaseService.getFarmCrops(farms.first['id']);
-        }
+        if (mounted) setState(() {});
       }
     } catch (e) {
-      print('Error loading initial data: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading weather data: $e'),
+            backgroundColor: KrushakColors.error,
+          ),
+        );
+      }
     }
   }
 
@@ -87,23 +66,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     return 'Evening';
   }
 
-  Future<void> _loadMarketPrices() async {
-    try {
-      final commodities = ['wheat', 'rice', 'cotton', 'soybean'];
-      _marketPrices.clear();
-
-      for (String commodity in commodities) {
-        final priceData = await GeminiAIService.getMarketPrices(
-          commodity,
-          'India',
-        );
-        _marketPrices.add(priceData);
-      }
-    } catch (e) {
-      print('Error loading market prices: $e');
-    }
-  }
-
   @override
   void dispose() {
     _refreshController.dispose();
@@ -111,18 +73,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.dispose();
   }
 
-  Future<void> _onRefresh() async {
-    _refreshController.forward();
-    await _loadInitialData();
-    _refreshController.reset();
-  }
-
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+    final userData = authState.profile;
+    final dashboardData = ref.watch(dashboardProvider);
+
     return Scaffold(
       backgroundColor: KrushakColors.backgroundLight,
       body: RefreshIndicator(
-        onRefresh: _onRefresh,
+        onRefresh: () async {
+          _refreshController.forward();
+          await _loadInitialData();
+          await ref.read(dashboardProvider.notifier).refresh();
+          _refreshController.reset();
+        },
         color: KrushakColors.primaryGreen,
         child: CustomScrollView(
           controller: _scrollController,
@@ -186,7 +151,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                                           ),
                                     ),
                                     Text(
-                                      _userData?['full_name'] ?? 'Farmer',
+                                      userData?['full_name'] ?? 'Farmer',
                                       style: KrushakTextStyles.h4.copyWith(
                                         color: KrushakColors.white,
                                         fontWeight: FontWeight.bold,
@@ -235,8 +200,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
                   // Announcements
-                  if (_announcements.isNotEmpty) ...[
-                    _buildAnnouncementsCard(),
+                  if (dashboardData.announcements.isNotEmpty) ...[
+                    _buildAnnouncementsCard(dashboardData.announcements),
                     const SizedBox(height: KrushakSpacing.md),
                   ],
 
@@ -272,7 +237,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     );
   }
 
-  Widget _buildAnnouncementsCard() {
+  Widget _buildAnnouncementsCard(List<Map<String, dynamic>> announcements) {
     return Container(
       padding: const EdgeInsets.all(KrushakSpacing.lg),
       decoration: BoxDecoration(
@@ -305,7 +270,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           ),
           const SizedBox(height: KrushakSpacing.md),
-          ...(_announcements
+          ...(announcements
               .take(2)
               .map(
                 (announcement) => Container(
@@ -536,9 +501,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Widget _buildFarmOverviewCard() {
-    final totalArea = _userData?['farm_area'] ?? '5.2';
-    final activeCrops = _farmCrops.length.toString();
-    final carbonCredits = _userData?['carbon_credits'] ?? '124';
+    final authState = ref.watch(authProvider);
+    final userData = authState.profile;
+    final dashboardData = ref.watch(dashboardProvider);
+
+    final totalArea = userData?['land_acres']?.toString() ?? '5.2';
+    final activeCrops = dashboardData.farmCrops.length.toString();
+    final carbonCredits = userData?['carbon_credits']?.toString() ?? '124';
 
     return Container(
       padding: const EdgeInsets.all(KrushakSpacing.lg),
@@ -678,6 +647,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   }
 
   Widget _buildCropMonitoringCard() {
+    final dashboardData = ref.watch(dashboardProvider);
+
     return Container(
       padding: const EdgeInsets.all(KrushakSpacing.lg),
       decoration: BoxDecoration(
@@ -696,8 +667,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ),
           ),
           const SizedBox(height: KrushakSpacing.md),
-          if (_farmCrops.isNotEmpty)
-            ...(_farmCrops
+          if (dashboardData.farmCrops.isNotEmpty)
+            ...(dashboardData.farmCrops
                 .take(3)
                 .map(
                   (crop) => _buildCropItem(
@@ -851,23 +822,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             ],
           ),
           const SizedBox(height: KrushakSpacing.md),
-          if (_marketPrices.isNotEmpty)
-            ...(_marketPrices
-                .take(3)
-                .map(
-                  (priceData) => _buildPriceItem(
-                    priceData['commodity'] ?? 'Unknown',
-                    priceData['current_price'] ?? '₹0/quintal',
-                    priceData['price_trend'] ?? 'stable',
-                    priceData['price_trend'] == 'up',
-                  ),
-                )
-                .toList())
-          else ...[
-            _buildPriceItem('Wheat', '₹2,150', '+5%', true),
-            _buildPriceItem('Rice', '₹3,200', '-2%', false),
-            _buildPriceItem('Maize', '₹1,800', '+8%', true),
-          ],
+          Consumer(
+            builder: (context, ref, child) {
+              final marketPrices = ref.watch(marketDataProvider);
+
+              if (marketPrices.isNotEmpty) {
+                return Column(
+                  children: marketPrices
+                      .take(3)
+                      .map(
+                        (marketPrice) => _buildPriceItem(
+                          marketPrice.cropName,
+                          '₹${marketPrice.price.toStringAsFixed(0)}/${marketPrice.unit}',
+                          '${marketPrice.changePercentage.toStringAsFixed(1)}%',
+                          marketPrice.changePercentage > 0,
+                        ),
+                      )
+                      .toList(),
+                );
+              } else {
+                return Column(
+                  children: [
+                    _buildPriceItem('Wheat', '₹2,150', '+5%', true),
+                    _buildPriceItem('Rice', '₹3,200', '-2%', false),
+                    _buildPriceItem('Cotton', '₹5,800', '+3%', true),
+                  ],
+                );
+              }
+            },
+          ),
         ],
       ),
     );
