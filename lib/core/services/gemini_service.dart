@@ -1,11 +1,256 @@
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 
 class GeminiAIService {
-  static const String _apiKey =
-      'YOUR_GEMINI_API_KEY'; // Replace with your Gemini API key
+  static const String _apiKey = String.fromEnvironment(
+    'GEMINI_API_KEY',
+    defaultValue: 'demo_key',
+  );
   static const String _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+
+  static Timer? _autoAnalysisTimer;
+  static List<Function(String)> _analysisListeners = [];
+
+  static void initialize() {
+    // Start auto-analysis every 2 minutes as requested
+    _autoAnalysisTimer = Timer.periodic(
+      const Duration(minutes: 2),
+      (_) => _performAutoAnalysis(),
+    );
+  }
+
+  static void dispose() {
+    _autoAnalysisTimer?.cancel();
+    _analysisListeners.clear();
+  }
+
+  static void addAnalysisListener(Function(String) listener) {
+    _analysisListeners.add(listener);
+  }
+
+  static void removeAnalysisListener(Function(String) listener) {
+    _analysisListeners.remove(listener);
+  }
+
+  static void _notifyListeners(String analysis) {
+    for (final listener in _analysisListeners) {
+      try {
+        listener(analysis);
+      } catch (e) {
+        print('Error notifying analysis listener: $e');
+      }
+    }
+  }
+
+  static Future<void> _performAutoAnalysis() async {
+    try {
+      final currentTime = DateTime.now();
+      final hour = currentTime.hour;
+
+      String analysisType;
+      if (hour >= 6 && hour < 12) {
+        analysisType = 'morning_analysis';
+      } else if (hour >= 12 && hour < 18) {
+        analysisType = 'afternoon_analysis';
+      } else {
+        analysisType = 'evening_analysis';
+      }
+
+      final analysis = await _getTimeBasedAnalysis(analysisType, currentTime);
+      _notifyListeners(analysis);
+    } catch (e) {
+      print('Error performing auto analysis: $e');
+    }
+  }
+
+  static Future<String> _getTimeBasedAnalysis(
+    String type,
+    DateTime time,
+  ) async {
+    String prompt;
+
+    switch (type) {
+      case 'morning_analysis':
+        prompt =
+            '''
+        Good morning! Provide a comprehensive farming analysis for today:
+        
+        1. Weather considerations for morning farm activities
+        2. Best crops to tend to in morning hours
+        3. Irrigation recommendations
+        4. Market opportunities to watch today
+        5. Seasonal farming tips for ${_getCurrentSeason()}
+        
+        Current time: ${time.toString()}
+        Keep response under 200 words and make it actionable for Indian farmers.
+        ''';
+        break;
+
+      case 'afternoon_analysis':
+        prompt =
+            '''
+        Afternoon farming update:
+        
+        1. Midday weather precautions
+        2. Market price movements to monitor
+        3. Crop protection advice for afternoon heat
+        4. Optimal selling times today
+        5. Equipment maintenance tips
+        
+        Current time: ${time.toString()}
+        Keep response under 200 words and focus on practical advice.
+        ''';
+        break;
+
+      case 'evening_analysis':
+        prompt =
+            '''
+        Evening farming summary:
+        
+        1. Tomorrow's farming preparations
+        2. Market analysis and selling opportunities
+        3. Crop health monitoring tips
+        4. Weather outlook for next day
+        5. End-of-day farm management tasks
+        
+        Current time: ${time.toString()}
+        Keep response under 200 words and plan-focused.
+        ''';
+        break;
+
+      default:
+        prompt = '''
+        General farming analysis:
+        
+        1. Current season farming recommendations
+        2. Market trends to watch
+        3. Weather-based farming tips
+        4. Crop management advice
+        
+        Provide actionable insights for farmers in under 150 words.
+        ''';
+    }
+
+    return await analyzeWithPrompt(prompt) ??
+        'Auto-analysis temporarily unavailable. Check weather and market updates manually.';
+  }
+
+  static String _getCurrentSeason() {
+    final month = DateTime.now().month;
+    if (month >= 3 && month <= 5) return 'Summer';
+    if (month >= 6 && month <= 9) return 'Monsoon';
+    if (month >= 10 && month <= 2) return 'Winter';
+    return 'Transition';
+  }
+
+  static Future<String?> analyzeWithPrompt(String prompt) async {
+    try {
+      if (_apiKey == 'demo_key') {
+        // Return demo response when API key is not available
+        return _getDemoResponse(prompt);
+      }
+
+      final response = await http.post(
+        Uri.parse('$_baseUrl?key=$_apiKey'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'contents': [
+            {
+              'parts': [
+                {'text': prompt},
+              ],
+            },
+          ],
+          'generationConfig': {
+            'temperature': 0.7,
+            'topK': 40,
+            'topP': 0.95,
+            'maxOutputTokens': 1024,
+          },
+          'safetySettings': [
+            {
+              'category': 'HARM_CATEGORY_HARASSMENT',
+              'threshold': 'BLOCK_MEDIUM_AND_ABOVE',
+            },
+            {
+              'category': 'HARM_CATEGORY_HATE_SPEECH',
+              'threshold': 'BLOCK_MEDIUM_AND_ABOVE',
+            },
+            {
+              'category': 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+              'threshold': 'BLOCK_MEDIUM_AND_ABOVE',
+            },
+            {
+              'category': 'HARM_CATEGORY_DANGEROUS_CONTENT',
+              'threshold': 'BLOCK_MEDIUM_AND_ABOVE',
+            },
+          ],
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final candidates = data['candidates'] as List?;
+
+        if (candidates != null && candidates.isNotEmpty) {
+          final content = candidates[0]['content'];
+          final parts = content['parts'] as List?;
+
+          if (parts != null && parts.isNotEmpty) {
+            return parts[0]['text'] as String?;
+          }
+        }
+      }
+
+      throw Exception('Invalid response format');
+    } catch (e) {
+      print('Error calling Gemini API: $e');
+      return _getDemoResponse(prompt);
+    }
+  }
+
+  static String _getDemoResponse(String prompt) {
+    // Provide contextual demo responses based on prompt keywords
+    final lowerPrompt = prompt.toLowerCase();
+
+    if (lowerPrompt.contains('weather') &&
+        lowerPrompt.contains('temperature')) {
+      return 'Weather Alert: Monitor temperature changes. Ensure adequate irrigation during hot weather. Protect crops from extreme conditions.';
+    }
+
+    if (lowerPrompt.contains('market') && lowerPrompt.contains('price')) {
+      return 'Market Update: Current prices show seasonal trends. Consider selling high-demand crops. Monitor government procurement rates.';
+    }
+
+    if (lowerPrompt.contains('morning')) {
+      return 'Morning Farming Tips: Check irrigation systems, inspect crops for pests, plan fertilizer application. Ideal time for field work before heat increases.';
+    }
+
+    if (lowerPrompt.contains('afternoon')) {
+      return 'Afternoon Guidance: Avoid heavy fieldwork during peak heat. Focus on equipment maintenance, market research, and planning activities.';
+    }
+
+    if (lowerPrompt.contains('evening')) {
+      return 'Evening Planning: Review today\'s progress, prepare for tomorrow\'s tasks, check weather forecast, plan irrigation schedules.';
+    }
+
+    if (lowerPrompt.contains('crop') &&
+        lowerPrompt.contains('recommendation')) {
+      return 'Crop Management: Monitor plant health, ensure proper nutrition, check for diseases, maintain optimal soil moisture levels.';
+    }
+
+    if (lowerPrompt.contains('rain') || lowerPrompt.contains('heavy')) {
+      return 'Rain Advisory: Ensure proper drainage, protect crops from waterlogging, postpone fertilizer application until after rain.';
+    }
+
+    if (lowerPrompt.contains('drought') || lowerPrompt.contains('humidity')) {
+      return 'Drought Management: Implement water conservation, use mulching techniques, adjust irrigation schedules, protect sensitive crops.';
+    }
+
+    return 'Agricultural Advisory: Focus on seasonal best practices, monitor weather conditions, stay updated with market trends, maintain crop health.';
+  }
 
   // Get real-time market prices
   static Future<Map<String, dynamic>> getMarketPrices(

@@ -156,10 +156,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                               CircleAvatar(
                                 radius: 25,
                                 backgroundColor: KrushakColors.white,
-                                child: Icon(
-                                  Icons.agriculture,
-                                  color: KrushakColors.primaryGreen,
-                                  size: KrushakIconSizes.md,
+                                child: ClipOval(
+                                  child: Image.asset(
+                                    'web/logoapp.png',
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Icon(
+                                        Icons.agriculture,
+                                        color: KrushakColors.primaryGreen,
+                                        size: KrushakIconSizes.md,
+                                      );
+                                    },
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: KrushakSpacing.md),

@@ -1,30 +1,58 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class SupabaseService {
-  static late SupabaseClient _client;
+  static SupabaseClient? _client;
+  static bool _isInitialized = false;
 
-  static SupabaseClient get client => _client;
+  static SupabaseClient get client {
+    if (_client == null) {
+      throw Exception(
+        'Supabase client not initialized. Call initialize() first.',
+      );
+    }
+    return _client!;
+  }
+
+  static bool get isInitialized => _isInitialized;
 
   static Future<void> initialize() async {
-    await Supabase.initialize(
-      url: const String.fromEnvironment(
-        'SUPABASE_URL',
-        defaultValue: 'https://your-project-url.supabase.co',
-      ),
-      anonKey: const String.fromEnvironment(
-        'SUPABASE_ANON_KEY',
-        defaultValue: 'your-anon-key',
-      ),
-    );
-    _client = Supabase.instance.client;
+    if (_isInitialized) return;
+
+    try {
+      final supabaseUrl =
+          dotenv.env['SUPABASE_URL'] ??
+          const String.fromEnvironment('SUPABASE_URL');
+      final supabaseAnonKey =
+          dotenv.env['SUPABASE_ANON_KEY'] ??
+          const String.fromEnvironment('SUPABASE_ANON_KEY');
+
+      if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty) {
+        throw Exception(
+          'Supabase URL and Anon Key are required. Please check your .env file.',
+        );
+      }
+
+      print('Initializing Supabase with URL: $supabaseUrl');
+
+      await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+
+      _client = Supabase.instance.client;
+      _isInitialized = true;
+
+      print('Supabase initialized successfully');
+    } catch (e) {
+      print('Error initializing Supabase: $e');
+      throw Exception('Failed to initialize Supabase: $e');
+    }
   }
 
   // User Management
   static Future<Map<String, dynamic>?> getCurrentUser() async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) return null;
 
-    final response = await _client
+    final response = await client
         .from('users')
         .select('*')
         .eq('id', user.id)
@@ -36,10 +64,10 @@ class SupabaseService {
   static Future<void> updateUserProfile(
     Map<String, dynamic> profileData,
   ) async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) throw Exception('No user logged in');
 
-    await _client.from('users').upsert({
+    await client.from('users').upsert({
       'id': user.id,
       'email': user.email,
       ...profileData,
@@ -49,10 +77,10 @@ class SupabaseService {
 
   // Farm Management
   static Future<List<Map<String, dynamic>>> getUserFarms() async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) return [];
 
-    final response = await _client
+    final response = await client
         .from('farms')
         .select('*')
         .eq('user_id', user.id)
@@ -62,10 +90,10 @@ class SupabaseService {
   }
 
   static Future<void> addFarm(Map<String, dynamic> farmData) async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) throw Exception('No user logged in');
 
-    await _client.from('farms').insert({
+    await client.from('farms').insert({
       'user_id': user.id,
       ...farmData,
       'created_at': DateTime.now().toIso8601String(),
@@ -76,7 +104,7 @@ class SupabaseService {
     String farmId,
     Map<String, dynamic> farmData,
   ) async {
-    await _client
+    await client
         .from('farms')
         .update({...farmData, 'updated_at': DateTime.now().toIso8601String()})
         .eq('id', farmId);
@@ -84,7 +112,7 @@ class SupabaseService {
 
   // Crop Management
   static Future<List<Map<String, dynamic>>> getFarmCrops(String farmId) async {
-    final response = await _client
+    final response = await client
         .from('crops')
         .select('*')
         .eq('farm_id', farmId)
@@ -94,7 +122,7 @@ class SupabaseService {
   }
 
   static Future<void> addCrop(Map<String, dynamic> cropData) async {
-    await _client.from('crops').insert({
+    await client.from('crops').insert({
       ...cropData,
       'created_at': DateTime.now().toIso8601String(),
     });
@@ -102,10 +130,10 @@ class SupabaseService {
 
   // Financial Management
   static Future<List<Map<String, dynamic>>> getFinancialRecords() async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) return [];
 
-    final response = await _client
+    final response = await client
         .from('financial_records')
         .select('*')
         .eq('user_id', user.id)
@@ -117,10 +145,10 @@ class SupabaseService {
   static Future<void> addFinancialRecord(
     Map<String, dynamic> recordData,
   ) async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) throw Exception('No user logged in');
 
-    await _client.from('financial_records').insert({
+    await client.from('financial_records').insert({
       'user_id': user.id,
       ...recordData,
       'created_at': DateTime.now().toIso8601String(),
@@ -129,10 +157,10 @@ class SupabaseService {
 
   // Orders Management
   static Future<List<Map<String, dynamic>>> getUserOrders() async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) return [];
 
-    final response = await _client
+    final response = await client
         .from('orders')
         .select('*')
         .eq('user_id', user.id)
@@ -142,10 +170,10 @@ class SupabaseService {
   }
 
   static Future<void> createOrder(Map<String, dynamic> orderData) async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) throw Exception('No user logged in');
 
-    await _client.from('orders').insert({
+    await client.from('orders').insert({
       'user_id': user.id,
       ...orderData,
       'status': 'pending',
@@ -155,10 +183,10 @@ class SupabaseService {
 
   // Notifications
   static Future<List<Map<String, dynamic>>> getUserNotifications() async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) return [];
 
-    final response = await _client
+    final response = await client
         .from('notifications')
         .select('*')
         .eq('user_id', user.id)
@@ -169,7 +197,7 @@ class SupabaseService {
   }
 
   static Future<void> markNotificationAsRead(String notificationId) async {
-    await _client
+    await client
         .from('notifications')
         .update({'read': true})
         .eq('id', notificationId);
@@ -177,7 +205,7 @@ class SupabaseService {
 
   // Announcements
   static Future<List<Map<String, dynamic>>> getActiveAnnouncements() async {
-    final response = await _client
+    final response = await client
         .from('announcements')
         .select('*')
         .eq('active', true)
@@ -188,7 +216,7 @@ class SupabaseService {
   }
 
   static Future<List<Map<String, dynamic>>> getAnnouncements() async {
-    final response = await _client
+    final response = await client
         .from('announcements')
         .select('*')
         .eq('active', true)
@@ -202,7 +230,7 @@ class SupabaseService {
   static Future<void> addAnnouncement(
     Map<String, dynamic> announcementData,
   ) async {
-    await _client.from('announcements').insert({
+    await client.from('announcements').insert({
       ...announcementData,
       'created_at': DateTime.now().toIso8601String(),
     });
@@ -210,10 +238,10 @@ class SupabaseService {
 
   // Additional Crop Management
   static Future<List<Map<String, dynamic>>> getUserCrops() async {
-    final user = _client.auth.currentUser;
+    final user = client.auth.currentUser;
     if (user == null) return [];
 
-    final response = await _client
+    final response = await client
         .from('crops')
         .select('*, farms!inner(*)')
         .eq('farms.user_id', user.id)
@@ -224,19 +252,19 @@ class SupabaseService {
 
   // Additional Farm Management
   static Future<void> deleteFarm(String farmId) async {
-    await _client.from('farms').delete().eq('id', farmId);
+    await client.from('farms').delete().eq('id', farmId);
   }
 
   // Additional Financial Management
   static Future<void> deleteFinancialRecord(String recordId) async {
-    await _client.from('financial_records').delete().eq('id', recordId);
+    await client.from('financial_records').delete().eq('id', recordId);
   }
 
   static Future<void> updateFinancialRecord(
     String recordId,
     Map<String, dynamic> recordData,
   ) async {
-    await _client
+    await client
         .from('financial_records')
         .update({...recordData, 'updated_at': DateTime.now().toIso8601String()})
         .eq('id', recordId);

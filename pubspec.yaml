@@ -1,4 +1,4 @@
-name: krushak_app
+name: krushak
 description: "Krushak - The Farmer Operating System (FarmerOS). Empowering Indian farmers with AI-powered insights, carbon credit marketplace, and digital tools for sustainable agriculture."
 publish_to: 'none'
 
@@ -131,6 +131,7 @@ flutter:
     - assets/icons/
     - assets/backgrounds/
     - assets/animations/
+    - web/logoapp.png
     - .env
 
   # fonts:
